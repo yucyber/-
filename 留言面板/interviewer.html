@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>面试官回复面板</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .message-container {
+            height: 400px;
+            overflow-y: auto;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .message.candidate {
+            background-color: #e3f2fd;
+            margin-left: 20px;
+            border: 1px solid transparent;
+        }
+
+        .message.candidate:hover {
+            border-color: #2196f3;
+            box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
+        }
+
+        .message.interviewer {
+            background-color: #f1f1f1;
+            margin-right: 20px;
+        }
+
+        .message.selected {
+            border: 2px solid #2196f3;
+            box-shadow: 0 0 10px rgba(33, 150, 243, 0.2);
+        }
+
+        .message-content {
+            margin: 5px 0;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .reply-to {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            padding: 3px 6px;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 3px;
+        }
+
+        #messageForm {
+            display: flex;
+            gap: 10px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        #messageInput:disabled {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #1976d2;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .reply-info {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>面试官回复面板</h1>
+    <div class="reply-info" id="replyInfo">请选择要回复的留言</div>
+    <div class="message-container" id="messageContainer"></div>
+    <form id="messageForm">
+        <input type="text" id="messageInput" placeholder="请先选择要回复的留言" required disabled>
+        <button type="submit" disabled>发送回复</button>
+    </form>
+    <div class="status" id="status"></div>
+    <script src="interviewer.js"></script>
+</body>
+
+</html>
