@@ -1,3 +1,17 @@
+# 在线编程笔试平台
+
+该题详情 该课题是实现一个在线编程笔试平台，并支持用飞书云文档小组件的形式嵌入到飞书文档。主要功能是候选人在线完成代码编写，面试官可查看候选人编程结果。该课题涵盖了前端和后端所用的技术栈，前端部分推荐使用 React / Vue 等视图框架来进行开发，后端推荐使用 轻服务 / NodeJs 技术开发。
+
+## 主要文件和目录
+- [src/](src/) - 源代码目录
+- [public/](public/) - 前端页面
+- [scripts/](scripts/) - 脚本文件
+- [temp/](temp/) - 临时文件
+- [dist/](dist/) - 编译后文件
+- [package.json](package.json) - 项目依赖
+- [ormconfig.js](ormconfig.js) - 数据库配置
+- [tsconfig.json](tsconfig.json) - TypeScript配置
+
 ## 后端表设计
 1. 用户表
 
