@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加题目 - 在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .test-form {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            font-family: monospace;
+        }
+
+        .test-case {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .test-case-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .error {
+            color: #dc3545;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>添加题目</h1>
+            <button class="btn btn-primary" onclick="window.location.href='interviewer.html'">返回试卷列表</button>
+        </div>
+        <div class="test-form">
+            <form id="addTestForm">
+                <div class="form-group">
+                    <label for="testName">题目名称</label>
+                    <input type="text" id="testName" required>
+                </div>
+                <div class="form-group">
+                    <label for="testDescription">题目描述</label>
+                    <textarea id="testDescription" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="score">分数</label>
+                    <input type="number" id="score" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>测试用例</label>
+                    <div id="testCases">
+                        <!-- 测试用例将在这里动态添加 -->
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addTestCase()">添加测试用例</button>
+                </div>
+                <div style="text-align: right;">
+                    <button type="submit" class="btn btn-primary">保存题目</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        const session = localStorage.getItem('session');
+        const isInterviewer = localStorage.getItem('isInterviewer') === 'true';
+
+        if (!session) {
+            alert('您还未登录，请先登录');
+            window.location.href = 'login.html';
+            throw new Error('未登录');
+        }
+
+        if (!isInterviewer) {
+            alert('您不是面试官身份，无法访问此页面');
+            window.location.href = 'candidate.html';
+            throw new Error('权限不足');
+        }
+
+        // 获取URL参数中的试卷名称
+        const urlParams = new URLSearchParams(window.location.search);
+        const paperName = urlParams.get('paper');
+        if (!paperName) {
+            alert('未指定试卷名称');
+            window.location.href = 'interviewer.html';
+            throw new Error('缺少参数');
+        }
+
+        let testCaseCount = 0;
+
+        // 添加测试用例
+        function addTestCase() {
+            const testCases = document.getElementById('testCases');
+            const testCaseDiv = document.createElement('div');
+            testCaseDiv.className = 'test-case';
+            testCaseDiv.innerHTML = `
+                <div class="test-case-header">
+                    <h3>测试用例 #${testCaseCount + 1}</h3>
+                    <button type="button" class="btn btn-danger" onclick="removeTestCase(this)">删除</button>
+                </div>
+                <div class="form-group">
+                    <label>输入</label>
+                    <textarea class="test-input" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>期望输出</label>
+                    <textarea class="test-output" required></textarea>
+                </div>
+            `;
+            testCases.appendChild(testCaseDiv);
+            testCaseCount++;
+        }
+
+        // 删除测试用例
+        function removeTestCase(button) {
+            const testCase = button.closest('.test-case');
+            testCase.remove();
+            testCaseCount--;
+            // 更新测试用例编号
+            document.querySelectorAll('.test-case h3').forEach((h3, index) => {
+                h3.textContent = `测试用例 #${index + 1}`;
+            });
+        }
+
+        // 添加第一个测试用例
+        addTestCase();
+
+        // 提交表单
+        document.getElementById('addTestForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // 收集测试用例数据
+            const testCases = [];
+            document.querySelectorAll('.test-case').forEach((testCase, index) => {
+                testCases.push({
+                    input: testCase.querySelector('.test-input').value,
+                    output: testCase.querySelector('.test-output').value
+                });
+            });
+
+            // 构建题目描述，包含测试用例
+            const testDescription = `${document.getElementById('testDescription').value}\n\n测试用例：\n${testCases.map((testCase, index) =>
+                `用例 ${index + 1}:\n输入：\n${testCase.input}\n期望输出：\n${testCase.output}`
+            ).join('\n\n')
+                }`;
+
+            const formData = {
+                paper: paperName,
+                test_name: document.getElementById('testName').value,
+                test: testDescription,
+                answer: testCases.map(tc => tc.output).join('\n'),
+                tags: '',
+                level: 'normal',
+                point: parseInt(document.getElementById('score').value),
+                cookie: session
+            };
+
+            console.log('发送的数据:', formData);
+
+            try {
+                const response = await fetch('http://localhost:3002/api/test/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                if (data.code === 200) {
+                    alert('题目添加成功');
+                    // 清空表单
+                    document.getElementById('testName').value = '';
+                    document.getElementById('testDescription').value = '';
+                    document.getElementById('score').value = '';
+                    document.getElementById('testCases').innerHTML = '';
+                    testCaseCount = 0;
+                    addTestCase();
+                } else {
+                    throw new Error(data.msg || '题目添加失败');
+                }
+            } catch (error) {
+                console.error('添加题目失败:', error);
+                alert('添加题目失败：' + error.message);
+            }
+        });
+    </script>
+</body>
+
+</html>

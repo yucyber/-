@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>试卷结果 - 在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .results-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .paper-info {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .candidate-results {
+            margin-bottom: 2rem;
+        }
+
+        .candidate-item {
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .candidate-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .test-results {
+            margin-left: 1rem;
+        }
+
+        .test-item {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .score {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .pass {
+            color: #28a745;
+        }
+
+        .fail {
+            color: #dc3545;
+        }
+
+        .code-block {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin-top: 0.5rem;
+        }
+
+        .info {
+            color: #666;
+            margin: 0.5rem 0;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>试卷结果</h1>
+            <button class="btn btn-primary" onclick="window.location.href='interviewer.html'">返回试卷列表</button>
+        </div>
+        <div class="results-container">
+            <div class="paper-info">
+                <h2 id="paperName"></h2>
+                <p class="info">开始时间：<span id="timeBegin"></span></p>
+                <p class="info">结束时间：<span id="timeEnd"></span></p>
+            </div>
+            <div id="candidateResults">
+                <!-- 考生结果将在这里动态加载 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        const session = localStorage.getItem('session');
+        const isInterviewer = localStorage.getItem('isInterviewer') === 'true';
+
+        if (!session) {
+            alert('您还未登录，请先登录');
+            window.location.href = 'login.html';
+            throw new Error('未登录');
+        }
+
+        if (!isInterviewer) {
+            alert('您不是面试官身份，无法访问此页面');
+            window.location.href = 'candidate.html';
+            throw new Error('权限不足');
+        }
+
+        // 获取URL参数中的试卷名称
+        const urlParams = new URLSearchParams(window.location.search);
+        const paperName = urlParams.get('paper');
+        if (!paperName) {
+            alert('未指定试卷名称');
+            window.location.href = 'interviewer.html';
+            throw new Error('缺少参数');
+        }
+
+        // 加载试卷信息和考生结果
+        async function loadResults() {
+            try {
+                const response = await fetch('http://localhost:3002/api/paper/show', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        cookie: session,
+                        interviewer: true
+                    })
+                });
+
+                const data = await response.json();
+                if (data.code === 200 && data.data && data.data.show) {
+                    const paper = data.data.show.find(p => p.paper_name === paperName);
+                    if (paper) {
+                        document.getElementById('paperName').textContent = paper.paper_name;
+                        document.getElementById('timeBegin').textContent = new Date(Number(paper.time_begin)).toLocaleString();
+                        document.getElementById('timeEnd').textContent = new Date(Number(paper.time_end)).toLocaleString();
+
+                        // 加载考生结果
+                        const resultsResponse = await fetch('http://localhost:3002/api/result/show', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                cookie: session,
+                                paper: paperName
+                            })
+                        });
+
+                        const resultsData = await resultsResponse.json();
+                        const candidateResults = document.getElementById('candidateResults');
+
+                        if (resultsData.code === 200 && resultsData.data && resultsData.data.length > 0) {
+                            resultsData.data.forEach(candidate => {
+                                const candidateDiv = document.createElement('div');
+                                candidateDiv.className = 'candidate-results';
+
+                                let totalScore = 0;
+                                const testResults = candidate.tests.map(test => {
+                                    const passed = test.result === 'Accepted';
+                                    const score = passed ? test.score : 0;
+                                    totalScore += score;
+                                    return `
+                                        <div class="test-item">
+                                            <div class="test-header">
+                                                <h4>${test.test_name}</h4>
+                                                <span class="score ${passed ? 'pass' : 'fail'}">
+                                                    ${score}/${test.score}分
+                                                </span>
+                                            </div>
+                                            <p>状态：<span class="${passed ? 'pass' : 'fail'}">${test.result}</span></p>
+                                            <p>提交的代码：</p>
+                                            <div class="code-block">${test.code || '未提交代码'}</div>
+                                        </div>
+                                    `;
+                                }).join('');
+
+                                candidateDiv.innerHTML = `
+                                    <div class="candidate-item">
+                                        <div class="candidate-header">
+                                            <h3>考生：${candidate.email}</h3>
+                                            <span class="score">总分：${totalScore}分</span>
+                                        </div>
+                                        <div class="test-results">
+                                            ${testResults}
+                                        </div>
+                                    </div>
+                                `;
+                                candidateResults.appendChild(candidateDiv);
+                            });
+                        } else {
+                            candidateResults.innerHTML = '<div class="no-results">暂无考生提交结果</div>';
+                        }
+                    } else {
+                        alert('未找到试卷信息');
+                        window.location.href = 'interviewer.html';
+                    }
+                }
+            } catch (error) {
+                console.error('加载结果失败:', error);
+                alert('加载结果失败，请检查网络连接');
+            }
+        }
+
+        // 页面加载完成后执行
+        window.onload = loadResults;
+    </script>
+</body>
+
+</html>

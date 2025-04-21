@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>更新测试用例</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .testcase {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .testcase-controls {
+            margin-top: 10px;
+        }
+
+        .add-testcase {
+            margin-top: 15px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            min-height: 60px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>更新测试用例</h1>
+        <div class="form-group">
+            <label for="testKey">题目ID</label>
+            <input type="number" id="testKey" placeholder="输入题目ID">
+        </div>
+        <button id="fetchTestCases">获取测试用例</button>
+
+        <div id="result" class="result" style="display: none;">
+            <h2>题目: <span id="testName"></span></h2>
+            <div id="testCases"></div>
+            <div class="add-testcase">
+                <button id="addTestCase">添加测试用例</button>
+            </div>
+            <button id="saveTestCases" style="margin-top: 15px;">保存更改</button>
+        </div>
+    </div>
+
+    <script>
+        // 获取会话Cookie
+        function getSessionCookie() {
+            return document.cookie.split(';')
+                .find(cookie => cookie.trim().startsWith('session='))
+                ?.split('=')[1];
+        }
+
+        // 获取测试用例
+        document.getElementById('fetchTestCases').addEventListener('click', async function () {
+            const testKey = document.getElementById('testKey').value;
+            if (!testKey) {
+                alert('请输入题目ID');
+                return;
+            }
+
+            const session = getSessionCookie();
+            if (!session) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test/update-testcase', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        testKey: parseInt(testKey),
+                        cookie: session
+                    }),
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                if (result.code === 200) {
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('testName').textContent = result.data.testName;
+                    renderTestCases(result.data.testCases || []);
+                } else {
+                    alert(result.msg || '获取失败');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('获取测试用例时发生错误');
+            }
+        });
+
+        // 渲染测试用例
+        function renderTestCases(testCases) {
+            const testCasesContainer = document.getElementById('testCases');
+            testCasesContainer.innerHTML = '';
+
+            testCases.forEach((testCase, index) => {
+                const testCaseDiv = document.createElement('div');
+                testCaseDiv.className = 'testcase';
+                testCaseDiv.innerHTML = `
+                    <h3>测试用例 ${index + 1}</h3>
+                    <div class="form-group">
+                        <label>输入 (每行一个值)</label>
+                        <textarea class="input">${testCase.input.join('\n')}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>期望输出 (每行一个值)</label>
+                        <textarea class="output">${testCase.output.join('\n')}</textarea>
+                    </div>
+                    <div class="testcase-controls">
+                        <button class="delete-testcase" data-index="${index}">删除</button>
+                    </div>
+                `;
+                testCasesContainer.appendChild(testCaseDiv);
+            });
+
+            // 添加删除测试用例的事件监听
+            document.querySelectorAll('.delete-testcase').forEach(button => {
+                button.addEventListener('click', function () {
+                    const index = parseInt(this.getAttribute('data-index'));
+                    const testCases = getTestCasesFromUI();
+                    testCases.splice(index, 1);
+                    renderTestCases(testCases);
+                });
+            });
+        }
+
+        // 从UI获取测试用例
+        function getTestCasesFromUI() {
+            const testCases = [];
+            const testCaseDivs = document.querySelectorAll('.testcase');
+
+            testCaseDivs.forEach(div => {
+                const input = div.querySelector('.input').value.split('\n').filter(Boolean);
+                const output = div.querySelector('.output').value.split('\n').filter(Boolean);
+                testCases.push({ input, output });
+            });
+
+            return testCases;
+        }
+
+        // 添加测试用例
+        document.getElementById('addTestCase').addEventListener('click', function () {
+            const testCases = getTestCasesFromUI();
+            testCases.push({ input: [''], output: [''] });
+            renderTestCases(testCases);
+        });
+
+        // 保存测试用例
+        document.getElementById('saveTestCases').addEventListener('click', async function () {
+            const testKey = document.getElementById('testKey').value;
+            const testCases = getTestCasesFromUI();
+            const session = getSessionCookie();
+
+            if (!session) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test/update-testcase', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        testKey: parseInt(testKey),
+                        cookie: session,
+                        testCases: testCases
+                    }),
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                if (result.code === 200) {
+                    alert('保存成功!');
+                    renderTestCases(result.data.testCases || []);
+                } else {
+                    alert(result.msg || '保存失败');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('保存测试用例时发生错误');
+            }
+        });
+    </script>
+</body>
+
+</html>

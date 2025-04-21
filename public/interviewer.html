@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>面试官界面 - 在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .user-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .paper-list {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .paper-item {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .paper-item:last-child {
+            border-bottom: none;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-logout {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .close {
+            float: right;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .info {
+            color: #666;
+            margin: 0.5rem 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>试卷管理</h1>
+            <div class="user-controls">
+                <span>欢迎，<span id="userEmail"></span></span>
+                <button class="btn btn-primary" onclick="showAddPaperModal()">添加试卷</button>
+                <button class="btn btn-logout" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+        <div class="paper-list" id="paperList">
+            <!-- 试卷列表将通过JavaScript动态加载 -->
+        </div>
+    </div>
+
+    <!-- 添加试卷的模态框 -->
+    <div id="addPaperModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideAddPaperModal()">&times;</span>
+            <h2>添加试卷</h2>
+            <form id="addPaperForm">
+                <div class="form-group">
+                    <label for="paperName">试卷名称</label>
+                    <input type="text" id="paperName" required>
+                </div>
+                <div class="form-group">
+                    <label for="paperDescription">试卷描述</label>
+                    <textarea id="paperDescription" rows="3" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="timeBegin">开始时间</label>
+                    <input type="datetime-local" id="timeBegin" required>
+                </div>
+                <div class="form-group">
+                    <label for="timeEnd">结束时间</label>
+                    <input type="datetime-local" id="timeEnd" required>
+                </div>
+                <div class="form-group">
+                    <label for="answerTime">答题时长（分钟）</label>
+                    <input type="number" id="answerTime" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="candidates">考生邮箱（每行一个）</label>
+                    <textarea id="candidates" rows="3" required
+                        placeholder="example1@example.com&#10;example2@example.com"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">创建试卷</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        const session = localStorage.getItem('session');
+        const isInterviewer = localStorage.getItem('isInterviewer') === 'true';
+
+        if (!session) {
+            alert('您还未登录，请先登录');
+            window.location.href = 'login.html';
+            throw new Error('未登录');
+        }
+
+        if (!isInterviewer) {
+            alert('您不是面试官身份，无法访问此页面');
+            window.location.href = 'candidate.html';
+            throw new Error('权限不足');
+        }
+
+        // 获取用户邮箱
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('http://localhost:3002/api/search_email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        cookie: session
+                    })
+                });
+
+                const data = await response.json();
+                if (data.code === 200) {
+                    document.getElementById('userEmail').textContent = data.data.email;
+                }
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+            }
+        }
+
+        // 加载试卷列表
+        async function loadPapers() {
+            try {
+                const response = await fetch('http://localhost:3002/api/paper/show', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        cookie: session,
+                        interviewer: true
+                    })
+                });
+
+                const data = await response.json();
+                const paperList = document.getElementById('paperList');
+                paperList.innerHTML = '';
+
+                if (data.code === 200 && data.data && data.data.show) {
+                    data.data.show.forEach(paper => {
+                        const paperItem = document.createElement('div');
+                        paperItem.className = 'paper-item';
+                        paperItem.innerHTML = `
+                            <div>
+                                <h3>${paper.paper_name}</h3>
+                                <p class="info">${paper.paper_description || '无描述'}</p>
+                                <p class="info">开始时间：${new Date(Number(paper.time_begin)).toLocaleString()}</p>
+                                <p class="info">结束时间：${new Date(Number(paper.time_end)).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <button class="btn btn-success" onclick="addTest('${paper.paper_name}')">添加题目</button>
+                                <button class="btn btn-primary" onclick="viewResults('${paper.paper_name}')">查看结果</button>
+                                <button class="btn btn-danger" onclick="deletePaper('${paper.paper_name}')">删除试卷</button>
+                            </div>
+                        `;
+                        paperList.appendChild(paperItem);
+                    });
+                }
+            } catch (error) {
+                console.error('加载试卷列表失败:', error);
+            }
+        }
+
+        // 显示添加试卷的模态框
+        function showAddPaperModal() {
+            document.getElementById('addPaperModal').style.display = 'block';
+        }
+
+        // 隐藏添加试卷的模态框
+        function hideAddPaperModal() {
+            document.getElementById('addPaperModal').style.display = 'none';
+        }
+
+        // 添加试卷
+        document.getElementById('addPaperForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = {
+                values: {
+                    paper: document.getElementById('paperName').value,
+                    paperDescription: document.getElementById('paperDescription').value,
+                    candidate: document.getElementById('candidates').value.split('\n').filter(email => email.trim()),
+                    timeBegin: new Date(document.getElementById('timeBegin').value).getTime(),
+                    timeEnd: new Date(document.getElementById('timeEnd').value).getTime(),
+                    answerTime: parseInt(document.getElementById('answerTime').value),
+                    check: false
+                },
+                cookie: session
+            };
+
+            try {
+                const response = await fetch('http://localhost:3002/api/paper/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                if (data.code === 200) {
+                    alert('试卷添加成功');
+                    hideAddPaperModal();
+                    loadPapers();
+                } else {
+                    alert(data.msg || '试卷添加失败');
+                }
+            } catch (error) {
+                console.error('添加试卷失败:', error);
+                alert('添加试卷失败，请检查网络连接');
+            }
+        });
+
+        // 删除试卷
+        async function deletePaper(paperName) {
+            if (!confirm(`确定要删除试卷"${paperName}"吗？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3002/api/paper/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        paper: paperName,
+                        cookie: session
+                    })
+                });
+
+                const data = await response.json();
+                if (data.code === 200) {
+                    alert('试卷删除成功');
+                    loadPapers();
+                } else {
+                    alert(data.msg || '试卷删除失败');
+                }
+            } catch (error) {
+                console.error('删除试卷失败:', error);
+                alert('删除试卷失败，请检查网络连接');
+            }
+        }
+
+        // 添加题目
+        function addTest(paperName) {
+            window.location.href = `add-test.html?paper=${encodeURIComponent(paperName)}`;
+        }
+
+        // 查看结果
+        function viewResults(paperName) {
+            window.location.href = `paper-results.html?paper=${encodeURIComponent(paperName)}`;
+        }
+
+        // 添加退出登录函数
+        async function logout() {
+            try {
+                const session = localStorage.getItem('session');
+                if (!session) {
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const response = await fetch('http://localhost:3002/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ cookie: session })
+                });
+
+                const data = await response.json();
+                console.log('退出登录响应:', data);
+
+                // 无论服务器响应如何，都清除本地存储并返回登录页
+                localStorage.clear();
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('退出登录失败:', error);
+                // 发生错误时也清除本地存储并返回登录页
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
+        }
+
+        // 页面加载完成后执行
+        window.onload = async function () {
+            await loadUserInfo();
+            await loadPapers();
+        };
+
+        // 点击模态框外部时关闭
+        window.onclick = function (event) {
+            const modal = document.getElementById('addPaperModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>

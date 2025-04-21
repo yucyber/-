@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考生界面 - 在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .paper-list {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .paper-item {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 1rem;
+        }
+
+        .paper-item:last-child {
+            border-bottom: none;
+        }
+
+        .paper-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+
+        .info {
+            color: #666;
+            margin: 0.5rem 0;
+        }
+
+        .status {
+            font-weight: bold;
+        }
+
+        .status-not-started {
+            color: #007bff;
+        }
+
+        .status-in-progress {
+            color: #28a745;
+        }
+
+        .status-completed {
+            color: #6c757d;
+        }
+
+        .status-expired {
+            color: #dc3545;
+        }
+
+        .no-papers {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>我的试卷</h1>
+            <div>
+                <span>欢迎，<span id="userEmail"></span></span>
+                <button class="btn btn-danger" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+        <div class="paper-list" id="paperList">
+            <!-- 试卷列表将在这里动态加载 -->
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        const session = localStorage.getItem('session');
+        const isInterviewer = localStorage.getItem('isInterviewer') === 'true';
+
+        if (!session) {
+            alert('您还未登录，请先登录');
+            window.location.href = 'login.html';
+            throw new Error('未登录');
+        }
+
+        if (isInterviewer) {
+            alert('您是面试官身份，请访问面试官页面');
+            window.location.href = 'interviewer.html';
+            throw new Error('权限不足');
+        }
+
+        // 获取用户邮箱
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('http://localhost:3002/api/search_email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        cookie: session
+                    })
+                });
+
+                const data = await response.json();
+                if (data.code === 200) {
+                    document.getElementById('userEmail').textContent = data.data.email;
+                }
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+            }
+        }
+
+        // 加载试卷列表
+        async function loadPapers() {
+            try {
+                const response = await fetch('http://localhost:3002/api/paper/show', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        cookie: session,
+                        interviewer: false
+                    })
+                });
+
+                const data = await response.json();
+                const paperList = document.getElementById('paperList');
+                paperList.innerHTML = '';
+
+                if (data.code === 200 && data.data && data.data.show && data.data.show.length > 0) {
+                    data.data.show.forEach(paper => {
+                        const now = Date.now();
+                        const timeBegin = Number(paper.time_begin);
+                        const timeEnd = Number(paper.time_end);
+
+                        let status, statusClass, actionButton;
+
+                        if (now < timeBegin) {
+                            status = '未开始';
+                            statusClass = 'status-not-started';
+                            actionButton = `<button class="btn btn-primary" disabled>等待开始</button>`;
+                        } else if (now >= timeBegin && now <= timeEnd) {
+                            if (paper.submitted) {
+                                status = '已完成';
+                                statusClass = 'status-completed';
+                                actionButton = `<button class="btn btn-primary" onclick="viewResult('${paper.paper_name}')">查看结果</button>`;
+                            } else {
+                                status = '进行中';
+                                statusClass = 'status-in-progress';
+                                actionButton = `<button class="btn btn-success" onclick="startExam('${paper.paper_name}')">开始答题</button>`;
+                            }
+                        } else {
+                            if (paper.submitted) {
+                                status = '已完成';
+                                statusClass = 'status-completed';
+                                actionButton = `<button class="btn btn-primary" onclick="viewResult('${paper.paper_name}')">查看结果</button>`;
+                            } else {
+                                status = '已过期';
+                                statusClass = 'status-expired';
+                                actionButton = `<button class="btn btn-danger" disabled>已过期</button>`;
+                            }
+                        }
+
+                        const paperItem = document.createElement('div');
+                        paperItem.className = 'paper-item';
+                        paperItem.innerHTML = `
+                            <div class="paper-header">
+                                <div>
+                                    <h3>${paper.paper_name}</h3>
+                                    <p class="info">${paper.paper_description || '无描述'}</p>
+                                </div>
+                                <span class="status ${statusClass}">${status}</span>
+                            </div>
+                            <p class="info">开始时间：${new Date(timeBegin).toLocaleString()}</p>
+                            <p class="info">结束时间：${new Date(timeEnd).toLocaleString()}</p>
+                            <p class="info">答题时长：${paper.answer_time}分钟</p>
+                            <div style="text-align: right;">
+                                ${actionButton}
+                            </div>
+                        `;
+                        paperList.appendChild(paperItem);
+                    });
+                } else {
+                    paperList.innerHTML = '<div class="no-papers">暂无可参加的试卷</div>';
+                }
+            } catch (error) {
+                console.error('加载试卷列表失败:', error);
+                alert('加载试卷列表失败，请检查网络连接');
+            }
+        }
+
+        // 开始答题
+        function startExam(paperName) {
+            window.location.href = `exam.html?paper=${encodeURIComponent(paperName)}`;
+        }
+
+        // 查看结果
+        function viewResult(paperName) {
+            window.location.href = `result.html?paper=${encodeURIComponent(paperName)}`;
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('session');
+            localStorage.removeItem('isInterviewer');
+            window.location.href = 'login.html';
+        }
+
+        // 页面加载完成后执行
+        window.onload = async function () {
+            await loadUserInfo();
+            await loadPapers();
+
+            // 定期刷新试卷列表
+            setInterval(loadPapers, 60000); // 每分钟刷新一次
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "CommonJS",
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "outDir": "./dist",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "noImplicitAny": false, // 防止对象隐式具有'任何'类型
+    "forceConsistentCasingInFileNames": false,
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types"
+    ],
+    "paths": {
+      "img/*": [
+        "./img/*"
+      ],
+      "src/*": [
+        "./src/*"
+      ],
+      "config": [
+        "src/config"
+      ],
+      "entity/*": [
+        "src/entity/*"
+      ],
+      "middleware/*": [
+        "./src/middleware/*"
+      ]
+    }
+  },
+  "include": [
+    "./src/**/*",
+    "./ormconfig.js",
+    "sendEmail.js",
+    "./src/types/*.d.ts"
+  ],
+  "exclude": [
+    "./node_modules"
+  ]
+}
