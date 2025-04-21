@@ -1,51 +1,44 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, } from 'typeorm';
-import { paperStatus } from '../config/types';
-import Test from './Test';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from "typeorm";
+import { Test } from "./Test";
 
-@Entity({ database: "alimydb" })
-export default class TestPaper {
+@Entity({ database: "examydb" })
+export class TestPaper {
   @PrimaryGeneratedColumn()
-  key: number = 0;
+  key: number;
 
   @Column()
-  interviewer: string = null;
+  paper_name: string;
 
-  @Column()
-  paper: string = null;
+  @Column({ default: 0 })
+  total_point: number;
 
-  @Column("longtext")
-  paper_description: string; 
+  @Column({ default: 0 })
+  total_num: number;
 
-  @OneToMany(type => Test, test => test.paper)
+  @Column({ default: '' })
+  description: string;
+
+  @Column({ default: '' })
+  interviewer: string;
+
+  @Column({ default: '' })
+  candidate: string;
+
+  @Column({ type: 'bigint', default: 0 })
+  time_begin: number;
+
+  @Column({ type: 'bigint', default: 0 })
+  time_end: number;
+
+  @Column({ default: false })
+  remaining_time: boolean;
+
+  @Column({ default: 60 })
+  answer_time: number;
+
+  @OneToMany(() => Test, test => test.paper, {
+    cascade: true,
+    eager: true
+  })
   tests: Test[];
-
-  @Column()
-  tests_num: number = 1;
-
-  @Column()
-  paper_point: number = 0;
-  
-  @Column()
-  check: boolean = true;
-
-  @Column("simple-array")
-  candidate?: string[];
-
-  @Column()
-  join_num: number = 0;
-
-  @Column()
-  look_over: boolean = false;
-
-  @Column("bigint")
-  time_begin: number = 0;
-
-  @Column("bigint")
-  time_end: number = 0;
-
-  @Column()
-  remaining_time: boolean = false;
-  
-  @Column()
-  answer_time: string = '';
 }

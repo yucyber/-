@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>试卷结果 - 在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .result-info {
+            margin-bottom: 2rem;
+        }
+
+        .result-info p {
+            margin: 0.5rem 0;
+            font-size: 1.1rem;
+        }
+
+        .test-list {
+            margin-top: 2rem;
+        }
+
+        .test-item {
+            padding: 1rem;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .test-item h3 {
+            margin: 0 0 1rem 0;
+        }
+
+        .score {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin-left: 1rem;
+        }
+
+        .status-pass {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .status-fail {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>试卷结果</h1>
+            <div>
+                <span>考生：<span id="userEmail"></span></span>
+            </div>
+        </div>
+        <div class="result-info">
+            <h2 id="paperTitle"></h2>
+            <p>开始时间：<span id="startTime"></span></p>
+            <p>结束时间：<span id="endTime"></span></p>
+            <p>总分：<span id="totalScore" class="score"></span></p>
+        </div>
+        <div id="testList" class="test-list">
+            <!-- 题目列表将通过JavaScript动态加载 -->
+        </div>
+    </div>
+
+    <script>
+        // 从URL获取试卷ID
+        const urlParams = new URLSearchParams(window.location.search);
+        const paperId = urlParams.get('paper');
+        const session = localStorage.getItem('session');
+
+        if (!session) {
+            alert('您还未登录，请先登录');
+            window.location.href = 'login.html';
+            throw new Error('未登录');
+        }
+
+        // 获取用户信息和试卷结果
+        async function loadResult() {
+            try {
+                // 获取用户信息
+                const userResponse = await fetch('http://localhost:3002/api/search_email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        cookie: session
+                    })
+                });
+
+                const userData = await userResponse.json();
+                if (userData.code === 200) {
+                    document.getElementById('userEmail').textContent = userData.data.email;
+                }
+
+                // 获取试卷信息和结果
+                const resultResponse = await fetch('http://localhost:3002/api/result/show', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        paper: paperId,
+                        cookie: session,
+                        email: userData.data.email
+                    })
+                });
+
+                const resultData = await resultResponse.json();
+                if (resultData.code === 200 && resultData.data) {
+                    const paper = resultData.data;
+                    document.getElementById('paperTitle').textContent = paper.paper_name;
+                    document.getElementById('startTime').textContent = new Date(Number(paper.time_begin)).toLocaleString();
+                    document.getElementById('endTime').textContent = new Date(Number(paper.time_end)).toLocaleString();
+
+                    // 显示考试结果
+                    const testList = document.getElementById('testList');
+                    let totalScore = 0;
+
+                    paper.tests.forEach(test => {
+                        const testDiv = document.createElement('div');
+                        testDiv.className = 'test-item';
+                        const passed = test.result === 'Accepted';
+                        const score = passed ? test.point : 0;
+                        totalScore += score;
+
+                        testDiv.innerHTML = `
+                            <h3>${test.test_name}</h3>
+                            <div>
+                                <span class="score">得分：${score}/${test.point}</span>
+                                <span class="status ${passed ? 'status-pass' : 'status-fail'}">
+                                    ${passed ? '通过' : '未通过'}
+                                </span>
+                            </div>
+                            <div class="code-block">${test.code || '未提交代码'}</div>
+                        `;
+                        testList.appendChild(testDiv);
+                    });
+
+                    document.getElementById('totalScore').textContent = `${totalScore}分`;
+                } else {
+                    alert('获取考试结果失败：' + (resultData.msg || '未知错误'));
+                }
+            } catch (error) {
+                console.error('加载结果失败:', error);
+                alert('加载结果失败，请检查网络连接');
+            }
+        }
+
+        // 页面加载完成后执行
+        window.onload = loadResult;
+    </script>
+</body>
+
+</html>

@@ -1,11 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
 
 @Entity({ database: "alimydb" })
-export default class LookOver {
-	@PrimaryGeneratedColumn()
-	key: number = 0;
+export class LookOver {
+  @PrimaryGeneratedColumn()
+  key: number = 0;
 
-	@Column()
+  @Column()
   email: string = null;
 
   @Column()

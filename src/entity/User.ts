@@ -1,33 +1,31 @@
 import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
 
-@Entity({ database: "alimydb" })
-export default class User {
+@Entity({ database: "examydb" })
+export class User {
 	@PrimaryGeneratedColumn()
-	key: number = 0;
+	id: number;
 
 	@Column()
-	account: string = '';
+	email: string;
+
+	@Column({ nullable: true })
+	cypher: string;
+
+	@Column({ nullable: true })
+	account: string;
 
 	@Column()
-	password: string = '';
+	password: string;
 
-	@Column()
-	email: string = '';
+	@Column({ nullable: true })
+	captcha: string;
 
-	@Column()
-	cypher: string = '';
-
-	@Column()
-	captcha: number = 0;
-
-	// @Column("date", { default: null })
-	// nowtime_captcha: Date;
-	@Column("bigint")
+	@Column({ nullable: true })
 	nowtime_captcha: number;
 
-	@Column({ default: null })
-	session: string = '';
+	@Column({ default: false })
+	interviewer: boolean;
 
-	@Column()
-	interviewer: boolean = false;
+	@Column({ nullable: true })
+	session: string;
 }

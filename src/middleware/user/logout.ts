@@ -1,16 +1,23 @@
 import { Context } from 'koa';
-import { getManager } from "typeorm";
-import User from '../../entity/User';
+import { getManager, getConnection } from "typeorm";
+import { User } from '../../entity/User';
 import responseClass from '../../config/responseClass';
 
-export default async (ctx:Context) => {
-  const cookie = ctx.request.body.cookie;
+interface LogoutRequest {
+  cookie: string;
+}
+
+export default async (ctx: Context) => {
+  const { cookie } = ctx.request.body as LogoutRequest;
   const userRepository = getManager().getRepository(User);
-  const user = await userRepository.findOne({ session: cookie });
-  if (user) {
-    // 删除 session 字段即可
-    user.session = '';
-    await userRepository.save(user);
-    ctx.body = new responseClass(200, '已退出登录', { status: true });
+  const saveUsers = await userRepository.findOne({ where: { session: cookie } });
+
+  if (saveUsers) {
+    saveUsers.session = null;
+    await userRepository.save(saveUsers);
+    ctx.cookies.set('session', '', { maxAge: 0 });
+    ctx.body = new responseClass(200, '退出登录成功', null);
+  } else {
+    ctx.body = new responseClass(200, '用户未登录', null);
   }
 }

@@ -1,27 +1,36 @@
-import { Context } from 'koa';
-import { getManager } from "typeorm";
-import Interview from '../../entity/Interview';
+import { Context } from "koa";
+import { getManager, getConnection, getRepository } from "typeorm";
+import { Interview } from "../../entity/Interview";
 import responseClass from '../../config/responseClass';
 
-export default async (ctx:Context) => {
-  const { inform, } = ctx.request.body;
-  const interviewRepository = getManager().getRepository(Interview);
-  let msg: string = '';
-  let status: boolean = false;
-  let findInterview = null;
-  
-  if (inform) {
-    try{
-      inform.map(async item => {
-        await interviewRepository.delete({ interview_room: item });
-      })
-      msg = '面试间删除成功';
-      status = true;
-      findInterview = await interviewRepository.find();
-    } catch(err) {
-      msg = '面试间删除失败';
-    }
-  }
-
-  ctx.body = new responseClass(200, msg, { status, findInterview });
+interface DeleteRequest {
+  inform: {
+    id: number;
+  };
 }
+
+export default async (ctx: Context) => {
+  try {
+    const { inform } = ctx.request.body as DeleteRequest;
+
+    const interviewRepository = getRepository(Interview);
+
+    const interview = await interviewRepository.findOne({
+      where: { id: inform.id },
+    });
+
+    if (!interview) {
+      ctx.status = 404;
+      ctx.body = new responseClass(404, "面试记录不存在", { status: false });
+      return;
+    }
+
+    await interviewRepository.remove(interview);
+
+    ctx.status = 200;
+    ctx.body = new responseClass(200, "删除成功", { status: true });
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = new responseClass(500, "服务器错误", { status: false, error: error instanceof Error ? error.message : String(error) });
+  }
+};

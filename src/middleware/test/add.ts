@@ -1,66 +1,128 @@
 import { Context } from 'koa';
-import { getManager, } from "typeorm";
-import Test from '../../entity/Test';
-import TestPaper from '../../entity/TestPaper';
-import Candidate from '../../entity/Candidate';
+import { getConnection } from 'typeorm';
+import { Test } from '../../entity/Test';
+import { TestPaper } from '../../entity/TestPaper';
 import responseClass from '../../config/responseClass';
 
-export default async (ctx:Context) => {
-  const request = ctx.request.body;
-  // 获取试卷名
-  const paperName = request.paper;
-  // 获取所有试题
-  const req = request.data;
-
-  const candidateRepository = getManager().getRepository(Candidate);
-  const testRepository = getManager().getRepository(Test);
-  // 查找试题所属试卷的 key 和 候选人的邮箱
-  const testPaperRepository = getManager().getRepository(TestPaper);
-  const testPaper = await testPaperRepository.findOne({ paper: paperName });
-  const testPaperKey = testPaper.key;
-  // const timeEnd = testPaper.time_end;
-  const testPaperEmail = testPaper.candidate;
-  // 根据 key 查找试卷的试题情况
-  const saveTest = await getManager().getRepository(Test)
-  .createQueryBuilder('test')
-  .leftJoinAndSelect('test.paper', 'papera')
-  .where('test.paperKey = :paperKey', { paperKey: testPaperKey })
-  .getMany()
-
-  if (saveTest.length === 0) {
-    let testsArr = [], paperPoint = 0;
-    for (let ch of request.candidateEmail) {
-      for (let ar of req) {
-        const newCandidate = new Candidate();
-        const newTest = new Test();
-        newTest.num = ar.num;
-        newTest.test_name = ar.testName;
-        newTest.test = ar.description;
-        newTest.answer = ar.answer;
-        newTest.level = ar.level;
-        newTest.point = ar.point;
-        newTest.tags = ar.tags;
-        paperPoint += ar.point;
-        newCandidate.email = ch;
-        newCandidate.test_name = ar.testName;
-        newCandidate.paper = request.paper;
-        newCandidate.watch = request.watch;
-        newCandidate.time_end = testPaper.time_end;
-        newCandidate.test_level = ar.level;
-        newCandidate.tags = ar.tags;
-        testsArr.push(newTest);
-        await testRepository.save(newTest);
-        await candidateRepository.save(newCandidate);
-      }
-    }
-    testPaper.tests_num = req.length;
-    testPaper.paper_point = paperPoint;
-    // 绑定关联
-    testPaper.tests = testsArr;
-    await testPaperRepository.save(testPaper);
-  
-    ctx.body = new responseClass(200, '试题添加成功', { status: true });
-  } else {
-    ctx.body = new responseClass(200, '试题已存在，无法添加；若想修改试卷信息，请前往修改页面', { status: false });
-  }
+interface AddTestRequest {
+    paper: string;
+    test_name: string;
+    test: string;
+    answer: string;
+    tags: string;
+    level: string;
+    point: number;
+    cookie: string;
 }
+
+export default async (ctx: Context) => {
+    try {
+        const { paper, test_name, test, answer, tags, level, point } = ctx.request.body as AddTestRequest;
+        console.log('添加题目请求:', { paper, test_name, level, point });
+
+        // 使用默认连接
+        const testRepository = getConnection().getRepository(Test);
+        const paperRepository = getConnection().getRepository(TestPaper);
+
+        // 查找试卷
+        const paperEntity = await paperRepository.findOne({
+            where: { paper_name: paper }
+        });
+
+        if (!paperEntity) {
+            console.log('试卷不存在:', { paper });
+            ctx.status = 404;
+            ctx.body = new responseClass(404, "试卷不存在", { status: false });
+            return;
+        }
+
+        console.log('找到试卷:', { paper: paperEntity.paper_name, total_num: paperEntity.total_num });
+
+        // 获取当前试题数量作为序号
+        const num = String(paperEntity.total_num + 1 || 1);
+
+        // 创建新的试题
+        const newTest = new Test();
+        newTest.num = num;
+        newTest.test_name = test_name;
+        newTest.test = test;
+        newTest.paperKey = paperEntity.key;
+        newTest.answer = answer;
+        newTest.tags = tags ? tags.split(',') : [];
+        newTest.level = level;
+        newTest.point = point;
+        newTest.testCases = [{
+            input: ["1", "1"],  // 示例输入：两个数字 1
+            output: ["1 + 1 = 2"]  // 期望输出
+        }];
+        newTest.template = {
+            code: `import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        
+        // 获取用户输入
+        System.out.print("请输入第一个数字：");
+        int num1 = scanner.nextInt();
+        
+        System.out.print("请输入第二个数字：");
+        int num2 = scanner.nextInt();
+        
+        // 计算并输出结果
+        System.out.println(num1 + " + " + num2 + " = " + (num1 + num2));
+        
+        scanner.close();  // 关闭输入流
+    }
+}`,
+            language: "java"
+        };
+
+        try {
+            // 保存新题目
+            const savedTest = await testRepository.save(newTest);
+            console.log('题目保存成功:', { key: savedTest.key, num: savedTest.num });
+
+            // 使用查询构建器更新试卷的题目数量和总分
+            const newTotalNum = (paperEntity.total_num || 0) + 1;
+            const newTotalPoint = (paperEntity.total_point || 0) + point;
+
+            // 使用明确的更新方法
+            await paperRepository
+                .createQueryBuilder()
+                .update(TestPaper)
+                .set({
+                    total_num: newTotalNum,
+                    total_point: newTotalPoint
+                })
+                .where("key = :key", { key: paperEntity.key })
+                .execute();
+
+            console.log('试卷更新成功:', {
+                paper: paperEntity.paper_name,
+                total_num: newTotalNum,
+                total_point: newTotalPoint
+            });
+
+            ctx.status = 200;
+            ctx.body = new responseClass(200, "添加成功", {
+                status: true,
+                key: savedTest.key,
+                num: savedTest.num,
+                level: savedTest.level,
+                point: savedTest.point
+            });
+        } catch (saveError) {
+            console.error('保存题目失败:', saveError);
+            throw saveError;
+        }
+
+    } catch (error) {
+        console.error('添加题目出错:', error);
+        ctx.status = 500;
+        ctx.body = new responseClass(500, "服务器错误", {
+            status: false,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    }
+}; 

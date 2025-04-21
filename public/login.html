@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .error {
+            color: red;
+            margin-top: 1rem;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 2rem;
+        }
+
+        .success {
+            color: green;
+            margin-top: 1rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .button-group button {
+            flex: 1;
+        }
+
+        #registerFields {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <h1>在线编程笔试平台</h1>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">邮箱</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="account">账号</label>
+                <input type="text" id="account" name="account">
+            </div>
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div id="registerFields">
+                <div class="form-group">
+                    <label for="cypher">确认密码</label>
+                    <input type="password" id="cypher" name="cypher">
+                </div>
+                <div class="form-group">
+                    <label for="identity">身份</label>
+                    <select id="identity" name="identity">
+                        <option value="false">考生</option>
+                        <option value="true">面试官</option>
+                    </select>
+                </div>
+            </div>
+            <div class="button-group">
+                <button type="button" onclick="switchMode()">切换到注册</button>
+                <button type="submit">登录</button>
+            </div>
+            <div id="message" class="error"></div>
+        </form>
+    </div>
+
+    <script>
+        let isLoginMode = true;
+        const messageDiv = document.getElementById('message');
+        const form = document.getElementById('loginForm');
+        const switchButton = form.querySelector('button[type="button"]');
+        const submitButton = form.querySelector('button[type="submit"]');
+        const registerFields = document.getElementById('registerFields');
+        const cypherInput = document.getElementById('cypher');
+
+        function switchMode() {
+            isLoginMode = !isLoginMode;
+            registerFields.style.display = isLoginMode ? 'none' : 'block';
+            cypherInput.required = !isLoginMode;
+            switchButton.textContent = isLoginMode ? '切换到注册' : '切换到登录';
+            submitButton.textContent = isLoginMode ? '登录' : '注册';
+            messageDiv.textContent = '';
+        }
+
+        async function register(formData) {
+            try {
+                console.log('发送注册请求:', formData);
+                const response = await fetch('http://localhost:3002/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                console.log('注册响应:', data);
+
+                if (data.code === 200) {
+                    messageDiv.className = 'success';
+                    messageDiv.textContent = '注册成功！正在自动登录...';
+                    // 注册成功后自动登录
+                    await login(formData);
+                } else {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = data.msg || '注册失败';
+                }
+            } catch (error) {
+                console.error('注册失败:', error);
+                messageDiv.className = 'error';
+                messageDiv.textContent = '服务器连接失败，请检查网络';
+            }
+        }
+
+        async function login(formData) {
+            try {
+                console.log('发送登录请求:', formData);
+                const response = await fetch('http://localhost:3002/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                console.log('登录响应:', data);
+
+                if (data.code === 200 && data.data && data.data.session) {
+                    // 登录成功，保存session和身份信息
+                    localStorage.setItem('session', data.data.session);
+                    localStorage.setItem('isInterviewer', data.data.interviewer);
+                    localStorage.setItem('userEmail', formData.email);
+                    messageDiv.className = 'success';
+                    messageDiv.textContent = '登录成功！正在跳转...';
+                    // 根据身份跳转到不同页面
+                    setTimeout(() => {
+                        if (data.data.interviewer) {
+                            window.location.href = 'interviewer.html';  // 面试官跳转到面试官页面
+                        } else {
+                            window.location.href = 'candidate.html';  // 考生跳转到考生页面
+                        }
+                    }, 1000);
+                } else {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = data.msg || '登录失败';
+                }
+            } catch (error) {
+                console.error('登录失败:', error);
+                messageDiv.className = 'error';
+                messageDiv.textContent = '服务器连接失败，请检查网络';
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = {
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value
+            };
+
+            const account = document.getElementById('account').value;
+            if (account) {
+                formData.account = account;
+            }
+
+            if (!isLoginMode) {
+                formData.cypher = document.getElementById('cypher').value;
+                formData.identity = document.getElementById('identity').value === 'true';
+                await register(formData);
+            } else {
+                await login(formData);
+            }
+        });
+
+        // 只有在未登录状态下才清除session
+        if (!localStorage.getItem('session')) {
+            localStorage.clear();
+        }
+    </script>
+</body>
+
+</html>

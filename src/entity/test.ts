@@ -1,37 +1,55 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany, } from 'typeorm';
-import TestPaper from './TestPaper';
-import Comment from './Comment';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { TestPaper } from './TestPaper';
+import { Comment } from './Comment';
 
 @Entity({ database: "examydb" })
-export default class Test {
+export class Test {
   @PrimaryGeneratedColumn()
   key: number;
 
-  @Column()
+  @Column({ default: '1' })
   num: string;
 
   @Column()
   test_name: string;
-  
-  @Column("longtext", { default: null })
+
+  @Column("longtext", { nullable: true })
   test: string;
 
-  @OneToMany(type => Comment, comment => comment.tests)
+  @OneToMany(() => Comment, comment => comment.test)
   comments: Comment[];
 
-  @ManyToOne(type => TestPaper, paper => paper.tests)
-  @JoinColumn()
+  @ManyToOne(() => TestPaper, paper => paper.tests, {
+    onDelete: 'CASCADE',
+    nullable: false
+  })
+  @JoinColumn({ name: 'paperKey', referencedColumnName: 'key' })
   paper: TestPaper;
 
-  @Column("longtext", { default: null })
+  @Column({ nullable: false, update: false })
+  paperKey: number;
+
+  @Column("longtext", { nullable: true })
   answer: string;
 
-  @Column("simple-array", { default: null })
+  @Column("simple-array", { nullable: true })
   tags: string[];
 
-  @Column()
+  @Column({ default: 'normal' })
   level: string;
 
-  @Column()
+  @Column({ default: 0 })
   point: number;
+
+  @Column("json", { nullable: true })
+  testCases: {
+    input: string[];
+    output: string[];
+  }[];
+
+  @Column("json", { nullable: true })
+  template: {
+    code: string;
+    language: string;
+  };
 }

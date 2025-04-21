@@ -1,9 +1,15 @@
+import 'dotenv/config';
 import Koa from 'koa';
 import Router from 'koa-router';
 import bodyParser from 'koa-bodyparser';
 import cors from 'koa2-cors';
 import websockify from 'koa-websocket';
-import { createConnections } from "typeorm";
+import { createConnection } from "typeorm";
+import { AddressInfo } from 'net';
+import serve from 'koa-static';
+import path from 'path';
+import { TestService } from './service/test.service';
+import { databaseConfig } from './config/database';
 
 import { ORIGINIP, WS_TYPE } from './config/const';
 import authenticate from './middleware/authenticate';
@@ -22,10 +28,13 @@ import lookOver from './middleware/paper/lookOver';
 
 import addTest from './middleware/test/add';
 import showTest from './middleware/test/show';
+import cleanupTest from './middleware/test/cleanup';
+import updateTestCase from './middleware/test/update-testcase';
 
 import submit from './middleware/candidate/submit';
 import search from './middleware/candidate/search';
 import comment from './middleware/candidate/comment';
+import runCode from './middleware/candidate/run';
 
 import createInterview from './middleware/interview/create';
 import findInterview from './middleware/interview/find';
@@ -46,185 +55,234 @@ interface msgObj {
   name: string;
 }
 
-createConnections ()
-.then(async () => {
-  const app = new Koa();
-  const router = new Router(); 
+// 定义错误接口
+interface ServerError extends Error {
+  status?: number;
+  code?: string;
+}
 
+// 设置全局超时检测
+const TIMEOUT = 30000; // 30 秒
+let isStarting = false;
 
+// 创建一个超时检测函数
+function checkTimeout() {
+  if (isStarting) {
+    console.error('服务器启动超时，正在退出...');
+    process.exit(1);
+  }
+}
 
-  const wss = new WebSocket.Server({ port: 9090 });
-  let clients = [];
-  let codeMsg = [];
+// 设置超时检测
+setTimeout(checkTimeout, TIMEOUT);
 
-  function wsSend(data: any) {
-  // function wsSend(data: { showVideo?: boolean, canVideo?: boolean, code?: string, cookie?: string, time?: any, identity?: string, msg?: string, id?: string, name?: string }) {
-    let retMsg = null;
-    switch(data.type) {
-      // case WS_TYPE.CONNECT:
-      // case WS_TYPE.TALK:
-        // talkMsg.push(data);
-        // retMsg = talkMsg;
-        // retMsg = data;
-        // break;
-      case WS_TYPE.CODE:
-        codeMsg.push(data);
-        retMsg = codeMsg;
-        codeMsg = [];
-        break;
-      case WS_TYPE.CONNECT:
-      case WS_TYPE.TALK:
-      case WS_TYPE.REQ_VIDEO:
-      case WS_TYPE.RES_VIDEO:
-      case WS_TYPE.VIDEO_OFFER:
-      case WS_TYPE.VIDEO_ANSWER:
-      case WS_TYPE.NEW_ICE_CANDIDATE:
-        retMsg = data;
-        break;
-      default:
-        return;
-    }
-    //遍历客户端
-    for (var i = 0; i < clients.length; i++) {
-      //声明客户端
-      var clientSocket = clients[i].ws;
-      if(clientSocket.readyState === WebSocket.OPEN) {
-        //客户端发送处理过的信息
-        clientSocket.send(JSON.stringify(retMsg));
+// 标记开始启动
+isStarting = true;
+
+// 尝试启动服务器的函数
+async function startServer(app: Koa, startPort: number, maxRetries: number = 10): Promise<void> {
+  for (let port = startPort; port < startPort + maxRetries; port++) {
+    try {
+      const server = app.listen(port);
+
+      await new Promise<void>((resolve, reject) => {
+        server.on('listening', () => {
+          const address = server.address() as AddressInfo;
+          console.log(`服务器成功运行在端口 ${address.port}`);
+          isStarting = false;
+          resolve();
+        });
+
+        server.on('error', (err: ServerError) => {
+          if (err.code === 'EADDRINUSE') {
+            console.log(`端口 ${port} 已被占用，尝试下一个端口...`);
+            server.close();
+            if (port === startPort + maxRetries - 1) {
+              reject(new Error('没有可用的端口'));
+            }
+          } else {
+            reject(err);
+          }
+        });
+      });
+
+      // 处理进程信号
+      process.on('SIGTERM', () => {
+        console.log('收到 SIGTERM 信号，正在关闭服务器...');
+        server.close(() => {
+          console.log('服务器已关闭');
+          process.exit(0);
+        });
+      });
+
+      // 如果成功启动，跳出循环
+      break;
+    } catch (err) {
+      if (port === startPort + maxRetries - 1) {
+        throw err;
       }
     }
   }
+}
 
-  
-  wss.on('connection', async function connection(ws, req) {
-    if (ws.readyState === WebSocket.OPEN) {
-      const obj = {
-        time: nowTime({ click: true }),
-        identity: '系统',
-        msg: '您已连接到服务器',
-        type: WS_TYPE.CONNECT
+createConnection(databaseConfig)
+  .then(async connection => {
+    try {
+      console.log('数据库连接成功');
+
+      const app = new Koa();
+      const router = new Router();
+
+      // 处理cookie跨域
+      const corsOptions = {
+        origin: function (ctx) {
+          return ctx.request.header.origin || 'http://localhost:3002';
+        },
+        credentials: true,
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
+        maxAge: 86400
       }
-      ws.send(JSON.stringify(obj));
+      app.use(cors(corsOptions));
+
+      // 添加静态文件服务
+      const publicPath = path.join(__dirname, '../public');
+      console.log('静态文件路径:', publicPath);
+      app.use(serve(publicPath));
+
+      // 添加根路由重定向
+      app.use(async (ctx, next) => {
+        if (ctx.path === '/') {
+          ctx.redirect('/login.html');
+        } else {
+          await next();
+        }
+      });
+
+      // 处理 post 请求的参数
+      app.use(bodyParser());
+
+      // 错误处理中间件
+      app.use(async (ctx, next) => {
+        try {
+          await next();
+        } catch (err) {
+          const serverError = err as ServerError;
+          console.error('服务器错误:', serverError);
+          ctx.status = serverError.status || 500;
+          ctx.body = {
+            message: '服务器内部错误',
+            error: serverError.message,
+            stack: serverError.stack
+          };
+        }
+      });
+
+      // 根据登录状态设置登录拦截
+      app.use(authenticate);
+
+      // 配置路由
+      router.post('/api/email', email);
+      router.post('/api/login', login);
+      router.post('/api/register', register);
+      router.post('/api/logout', logout);
+      router.post('/api/search_email', searchEmail);
+
+      // 试卷相关路由
+      router.post('/api/paper/show', paper);
+      router.post('/api/paper/add', addPaper);
+      router.post('/api/paper/delete', deletePaper);
+      router.post('/api/paper/modify', modifyPaper);
+      router.post('/api/paper/look_over', lookOver);
+
+      // 题目相关路由
+      router.post('/api/test/add', addTest);
+      router.post('/api/test/show', showTest);
+      router.post('/api/test/cleanup', cleanupTest);
+      router.post('/api/test/update-testcase', updateTestCase);
+
+      // 候选人相关路由
+      router.post('/api/candidate/submit', submit);
+      router.post('/api/candidate/search', search);
+      router.post('/api/candidate/comment', comment);
+      router.post('/api/candidate/run', runCode);
+
+      // 面试相关路由
+      router.post('/api/interview/create', createInterview);
+      router.post('/api/interview/find', findInterview);
+      router.post('/api/interview/submit', submitInterview);
+      router.post('/api/interview/delete', deleteInterview);
+
+      // Test APIs
+      router.post('/api/tests', async (ctx) => {
+        try {
+          const test = await TestService.createTest(ctx.request.body);
+          ctx.status = 200;
+          ctx.body = { code: 200, msg: '创建成功', data: test };
+        } catch (error: any) {
+          ctx.status = 400;
+          ctx.body = { code: 400, msg: error.message };
+        }
+      });
+
+      router.put('/api/tests/:key', async (ctx) => {
+        try {
+          const test = await TestService.updateTest(Number(ctx.params.key), ctx.request.body);
+          ctx.status = 200;
+          ctx.body = { code: 200, msg: '更新成功', data: test };
+        } catch (error: any) {
+          ctx.status = 400;
+          ctx.body = { code: 400, msg: error.message };
+        }
+      });
+
+      router.delete('/api/tests/:key', async (ctx) => {
+        try {
+          await TestService.deleteTest(Number(ctx.params.key));
+          ctx.status = 200;
+          ctx.body = { code: 200, msg: '删除成功' };
+        } catch (error: any) {
+          ctx.status = 400;
+          ctx.body = { code: 400, msg: error.message };
+        }
+      });
+
+      router.get('/api/tests/:key', async (ctx) => {
+        try {
+          const test = await TestService.getTestById(Number(ctx.params.key));
+          ctx.status = 200;
+          ctx.body = { code: 200, msg: '获取成功', data: test };
+        } catch (error: any) {
+          ctx.status = 400;
+          ctx.body = { code: 400, msg: error.message };
+        }
+      });
+
+      router.get('/api/papers/:paperKey/tests', async (ctx) => {
+        try {
+          const tests = await TestService.getTestsByPaper(Number(ctx.params.paperKey));
+          ctx.status = 200;
+          ctx.body = { code: 200, msg: '获取成功', data: tests };
+        } catch (error: any) {
+          ctx.status = 400;
+          ctx.body = { code: 400, msg: error.message };
+        }
+      });
+
+      // 使用路由中间件
+      app.use(router.routes());
+      app.use(router.allowedMethods());
+
+      // 启动服务器
+      const port = process.env.PORT ? parseInt(process.env.PORT) : 3002;
+      await startServer(app, port);
+
+    } catch (err) {
+      console.error('服务器启动失败:', err);
+      process.exit(1);
     }
-
-    ws.on('message', function incoming(messages: any) {
-      const { type, operation, cookie, time } = JSON.parse(messages);
-      const message = JSON.parse(messages);
-      switch (type) {
-        case WS_TYPE.CONNECT:
-          {
-            message.time = nowTime({ click: true });
-            message.name = message.identity;
-            message.identity = '系统';
-            message.msg = `已进入xxx号房间`;
-            message.id = cookie;
-            clients.push({ id: cookie, ws });
-            wsSend(message);
-            break;
-          }
-        case WS_TYPE.TALK:
-          {
-            message.time = nowTime({ click: true });
-            wsSend(message);
-            break;
-          }
-        case WS_TYPE.REQ_VIDEO:
-        case WS_TYPE.RES_VIDEO:
-        case WS_TYPE.VIDEO_OFFER:
-        case WS_TYPE.VIDEO_ANSWER:
-        case WS_TYPE.NEW_ICE_CANDIDATE:
-          {
-            wsSend(message);
-            break;
-          }
-        case WS_TYPE.CODE:
-          // // Both users start with the same document
-          // var str = "lorem ipsum";
-
-          // // User A appends the string " dolor"
-          // var operationA = new TextOperation()
-          //   .retain(11)
-          //   .insert(" dolor");
-          // var strA = operationA.apply(str); // "lorem ipsum dolor"
-
-          // // User B deletes the string "lorem " at the beginning
-          // var operationB = new TextOperation()
-          //   .delete("lorem ")
-          //   .retain(5);
-          // var strB = operationB.apply(str); // "ipsum";
-
-          // var transformedPair = TextOperation.transform(operationA, operationB);
-          // var operationAPrime = transformedPair[0];
-          // var operationBPrime = transformedPair[1];
-
-          // var strABPrime = operationAPrime.apply(strB); // "ipsum dolor"
-          // var strBAPrime = operationBPrime.apply(strA); // "ipsum dolor"
-          // // console.log('operationBPrime', operationBPrime)
-          // // console.log('operationBPrime', operationBPrime)
-
-
-          // const retCode = operationA.apply(code);
-          console.log(operation, cookie, time)
-          // const sss = operation.fromJSON()
-          // console.log('sss', sss)
-          // wsSend({ code, cookie, time });
-        default:
-          return;
-      }
-    });
-  });
-
-
-
-
-
-
-  // 处理cookie跨域
-  const corsOptions ={
-    origin: ORIGINIP, 
-    credentials: true,
-    optionSuccessStatus: 200
-  }
-  app.use(cors(corsOptions));
-  // 处理 post 请求的参数
-  app.use(bodyParser());
-  // 根据登录状态设置登录拦截
-  router.use(authenticate);
-  // router.use(WebSocketApi);
-  // 匹配接口
-  router.post('/api/email', email);
-  router.post('/api/login', login);
-  router.post('/api/register', register);
-  router.post('/api/logout', logout);
-  
-  router.post('/api/search_email', searchEmail);
-
-  // 试题管理
-  router.post('/api/paper', paper);
-  router.post('/api/add_paper', addPaper);
-  router.post('/api/delete_paper', deletePaper);
-  router.post('/api/modify_paper', modifyPaper);
-  // 阅卷管理
-  router.post('/api/look_over', lookOver);
-  // 面试间
-  // router.all('/koa/ws', WebSocketApi);
-  router.post('/api/create_interview', createInterview);
-  router.post('/api/find_interview', findInterview);
-  router.post('/api/submit_interview', submitInterview);
-  router.post('/api/delete_interview', deleteInterview);
-
-  router.post('/api/add_test', addTest);
-  router.post('/api/show_test', showTest);
-
-  router.post('/api/submit', submit);
-  router.post('/api/search', search);
-  router.post('/api/comment', comment);
-  // 组装匹配好的路由，返回一个合并好的中间件
-  app.use(router.routes());
-  // app.use(WebSocketApi);
-  
-  app.listen(8080, () => {
-    console.log('网站服务器启动成功，请访问 http://120.79.193.126:8080');
   })
-})
-.catch((error: any) => console.log('TypeOrm连接失败', error))
+  .catch(error => {
+    console.error('数据库连接失败:', error);
+    process.exit(1);
+  });

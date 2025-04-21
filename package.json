@@ -7,7 +7,9 @@
     "test": "cross-env \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/app.ts",
     "start": "node --experimental-modules --loader ts-node/esm src/app.ts",
-    "deploy": "node ./deploy/index.js"
+    "deploy": "node ./deploy/index.js",
+    "init-db": "node ./scripts/init-db.js",
+    "start-with-db": "node ./scripts/start.js"
   },
   "repository": {
     "type": "git",
@@ -21,11 +23,14 @@
   },
   "homepage": "https://github.com/HCYETY/Online-programming-platform_service#readme",
   "dependencies": {
+    "@types/koa-static": "^4.0.4",
+    "dotenv": "^16.4.7",
     "http": "^0.0.1-security",
     "install": "^0.13.0",
     "koa": "^2.13.1",
     "koa-bodyparser": "^4.3.0",
     "koa-router": "^10.1.1",
+    "koa-static": "^5.0.0",
     "koa-websocket": "^6.0.0",
     "koa2-cors": "^2.0.6",
     "mysql": "^2.18.1",
@@ -46,6 +51,7 @@
     "@types/node": "^16.11.6",
     "@types/ot": "^0.0.5",
     "@types/ws": "^8.2.2",
+    "axios": "^1.8.4",
     "js-beautify": "^1.14.0",
     "ot": "^0.0.15",
     "ts-node": "^10.4.0",

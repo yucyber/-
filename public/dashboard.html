@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>试卷管理 - 在线编程笔试平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        .paper-list {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .paper-item {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .paper-item:last-child {
+            border-bottom: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .close {
+            float: right;
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>试卷管理</h1>
+            <button class="btn" onclick="showCreatePaperModal()">创建新试卷</button>
+        </div>
+        <div id="paperList" class="paper-list">
+            <!-- 试卷列表将通过JavaScript动态加载 -->
+        </div>
+    </div>
+
+    <!-- 创建试卷的模态框 -->
+    <div id="createPaperModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideCreatePaperModal()">&times;</span>
+            <h2>创建新试卷</h2>
+            <form id="createPaperForm">
+                <div class="form-group">
+                    <label for="paperName">试卷名称</label>
+                    <input type="text" id="paperName" required>
+                </div>
+                <div class="form-group">
+                    <label for="paperDescription">试卷描述</label>
+                    <textarea id="paperDescription" rows="4" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="candidateEmail">考生邮箱（多个邮箱用逗号分隔）</label>
+                    <input type="text" id="candidateEmail" placeholder="example1@test.com, example2@test.com">
+                </div>
+                <div class="form-group">
+                    <label for="timeBegin">开始时间</label>
+                    <input type="datetime-local" id="timeBegin" required>
+                </div>
+                <div class="form-group">
+                    <label for="timeEnd">结束时间</label>
+                    <input type="datetime-local" id="timeEnd" required>
+                </div>
+                <button type="submit" class="btn">创建试卷</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 检查登录状态
+        const session = localStorage.getItem('session');
+        if (!session) {
+            window.location.href = 'login.html';
+        }
+
+        // 显示创建试卷模态框
+        function showCreatePaperModal() {
+            document.getElementById('createPaperModal').style.display = 'block';
+        }
+
+        // 隐藏创建试卷模态框
+        function hideCreatePaperModal() {
+            document.getElementById('createPaperModal').style.display = 'none';
+        }
+
+        // 加载试卷列表
+        async function loadPapers() {
+            try {
+                console.log('开始加载试卷列表，session:', session);
+                const response = await fetch('http://localhost:3002/api/paper/show', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        cookie: session,
+                        interviewer: true
+                    })
+                });
+
+                const data = await response.json();
+                console.log('加载试卷列表响应:', data);
+
+                const paperList = document.getElementById('paperList');
+                paperList.innerHTML = '';
+
+                if (data.code === 200 && data.data && data.data.show) {
+                    if (data.data.show.length === 0) {
+                        paperList.innerHTML = '<p>暂无试卷，请点击右上角创建新试卷</p>';
+                        return;
+                    }
+
+                    data.data.show.forEach(paper => {
+                        const paperElement = document.createElement('div');
+                        paperElement.className = 'paper-item';
+                        paperElement.innerHTML = `
+                            <h3>${paper.paper_name}</h3>
+                            <p>${paper.description}</p>
+                            <p>题目数量: ${paper.total_num || 0}</p>
+                            <p>总分: ${paper.total_point || 0}</p>
+                            <button class="btn" onclick="addTest('${paper.paper_name}')">添加题目</button>
+                        `;
+                        paperList.appendChild(paperElement);
+                    });
+                } else {
+                    paperList.innerHTML = '<p>加载试卷列表失败: ' + (data.msg || '未知错误') + '</p>';
+                }
+            } catch (error) {
+                console.error('加载试卷列表失败:', error);
+                document.getElementById('paperList').innerHTML = '<p>加载试卷列表失败，请检查网络连接</p>';
+            }
+        }
+
+        // 创建试卷
+        document.getElementById('createPaperForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = {
+                values: {
+                    paper: document.getElementById('paperName').value,
+                    paperDescription: document.getElementById('paperDescription').value,
+                    candidate: document.getElementById('candidateEmail').value.split(',').map(email => email.trim()),
+                    check: true,
+                    timeBegin: new Date(document.getElementById('timeBegin').value).toISOString(),
+                    timeEnd: new Date(document.getElementById('timeEnd').value).toISOString(),
+                    answerTime: 120
+                },
+                cookie: session
+            };
+
+            try {
+                console.log('发送创建试卷请求:', formData);
+                const response = await fetch('http://localhost:3002/api/paper/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                console.log('创建试卷响应:', data);
+
+                if (data.code === 200) {
+                    alert('试卷创建成功！');
+                    hideCreatePaperModal();
+                    // 重新加载试卷列表
+                    await loadPapers();
+                } else {
+                    alert(data.msg || '创建失败');
+                }
+            } catch (error) {
+                console.error('创建试卷失败:', error);
+                alert('服务器连接失败');
+            }
+        });
+
+        // 添加题目
+        function addTest(paperName) {
+            window.location.href = `add-test.html?paper=${encodeURIComponent(paperName)}`;
+        }
+
+        // 页面加载时获取试卷列表
+        loadPapers();
+    </script>
+</body>
+
+</html>

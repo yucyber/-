@@ -1,27 +1,29 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
-import Test from "./Test";
+import { Test } from "./Test";
 
-@Entity({ database: "alimydb" })
-export default class Comment {
-	@PrimaryGeneratedColumn()
-	key: number = 0;
-
-  @Column()
-  email: string = '';
-  
-	@Column()
-  like_num: number = 0;
+@Entity({ database: "examydb" })
+export class Comment {
+  @PrimaryGeneratedColumn()
+  key: number;
 
   @Column()
-  dislike_num: number = 0;
+  email: string;
+
+  @Column({ default: 0 })
+  like_num: number;
+
+  @Column({ default: 0 })
+  dislike_num: number;
 
   @Column("longtext")
-  comments: string = '';
+  comments: string;
 
-  @Column()
-  order: number = 0;
+  @Column({ default: 0 })
+  order: number;
 
-  @ManyToOne(type => Test, test => test.comments)
+  @ManyToOne(() => Test, test => test.comments)
   @JoinColumn()
-  tests: Test;
+  test: Test;
 }
+
+export default Comment;

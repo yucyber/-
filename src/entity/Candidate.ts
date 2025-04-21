@@ -1,8 +1,8 @@
 import { TEST_STATUS } from '../../src/config/const';
 import { Entity, PrimaryGeneratedColumn, Column, } from 'typeorm';
 
-@Entity({ database: "alimydb" })
-export default class Candidate {
+@Entity({ database: "examydb" })
+export class Candidate {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -32,6 +32,9 @@ export default class Candidate {
 
   @Column()
   submit_num: number = 0;
+
+  @Column({ nullable: true })
+  submit_time: Date;
 
   @Column()
   score: number = 0;

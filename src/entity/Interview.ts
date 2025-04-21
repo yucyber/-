@@ -2,7 +2,7 @@ import { INTERVIEW_STATUS } from '../config/const';
 import { Entity, PrimaryGeneratedColumn, Column, } from 'typeorm';
 
 @Entity({ database: "alimydb" })
-export default class Interview {
+export class Interview {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -29,7 +29,7 @@ export default class Interview {
 
   @Column()
   evaluation: string = '';
-  
+
   @Column()
   comment: string = '';
 }
