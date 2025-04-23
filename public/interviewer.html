@@ -25,12 +25,6 @@
             margin-bottom: 2rem;
         }
 
-        .user-controls {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
         .paper-list {
             background: white;
             padding: 2rem;
@@ -76,11 +70,6 @@
 
         .btn:hover {
             opacity: 0.9;
-        }
-
-        .btn-logout {
-            background-color: #6c757d;
-            color: white;
         }
 
         .modal {
@@ -132,6 +121,16 @@
             color: #666;
             margin: 0.5rem 0;
         }
+        #editor-wrapper {
+            border: 1px solid #ccc;
+            z-index: 100;
+        }
+        #toolbar-container {
+            border-bottom: 1px solid #ccc;
+        }
+        #editor-container {
+            height: 300px;
+        }
     </style>
 </head>
 
@@ -139,10 +138,9 @@
     <div class="container">
         <div class="header">
             <h1>试卷管理</h1>
-            <div class="user-controls">
+            <div>
                 <span>欢迎，<span id="userEmail"></span></span>
                 <button class="btn btn-primary" onclick="showAddPaperModal()">添加试卷</button>
-                <button class="btn btn-logout" onclick="logout()">退出登录</button>
             </div>
         </div>
         <div class="paper-list" id="paperList">
@@ -160,9 +158,9 @@
                     <label for="paperName">试卷名称</label>
                     <input type="text" id="paperName" required>
                 </div>
-                <div class="form-group">
-                    <label for="paperDescription">试卷描述</label>
-                    <textarea id="paperDescription" rows="3" required></textarea>
+                <div id="editor-wrapper">
+                    <div id="toolbar-container"></div>
+                    <div id="editor-container"></div>
                 </div>
                 <div class="form-group">
                     <label for="timeBegin">开始时间</label>
@@ -185,12 +183,14 @@
             </form>
         </div>
     </div>
-
+    <link rel="stylesheet" href="https://unpkg.com/@wangeditor/editor@latest/dist/css/style.css" />
+    <!-- 引入 wangEditor 的 JS -->
+    <script src="https://unpkg.com/@wangeditor/editor@latest/dist/index.js"></script>
     <script>
         // 检查登录状态
         const session = localStorage.getItem('session');
         const isInterviewer = localStorage.getItem('isInterviewer') === 'true';
-
+        const { createEditor, createToolbar } = window.wangEditor;
         if (!session) {
             alert('您还未登录，请先登录');
             window.location.href = 'login.html';
@@ -271,9 +271,36 @@
         }
 
         // 显示添加试卷的模态框
+        let editorInstance; // 全局变量
+        let editorCreated = false;
+
         function showAddPaperModal() {
-            document.getElementById('addPaperModal').style.display = 'block';
+            const modal = document.getElementById('addPaperModal');
+            modal.style.display = 'block';
+
+            if (!editorCreated) {
+                setTimeout(() => {
+                    const { createEditor, createToolbar } = window.wangEditor;
+                    editorInstance = createEditor({
+                        selector: '#editor',
+                        html: '',
+                        config: {
+                            placeholder: '请输入试卷描述...',
+                        },
+                        mode: 'default'
+                    });
+
+                    createToolbar({
+                        editor: editorInstance,
+                        selector: '#editor-toolbar',
+                        mode: 'default'
+                    });
+
+                    editorCreated = true;
+                }, 0); // 延迟一点点，确保 DOM 可见
+            }
         }
+
 
         // 隐藏添加试卷的模态框
         function hideAddPaperModal() {
@@ -286,7 +313,7 @@
             const formData = {
                 values: {
                     paper: document.getElementById('paperName').value,
-                    paperDescription: document.getElementById('paperDescription').value,
+                    paperDescription: editorInstance.getHtml(),
                     candidate: document.getElementById('candidates').value.split('\n').filter(email => email.trim()),
                     timeBegin: new Date(document.getElementById('timeBegin').value).getTime(),
                     timeEnd: new Date(document.getElementById('timeEnd').value).getTime(),
@@ -295,6 +322,7 @@
                 },
                 cookie: session
             };
+
 
             try {
                 const response = await fetch('http://localhost:3002/api/paper/add', {
@@ -361,44 +389,32 @@
         function viewResults(paperName) {
             window.location.href = `paper-results.html?paper=${encodeURIComponent(paperName)}`;
         }
-
-        // 添加退出登录函数
-        async function logout() {
-            try {
-                const session = localStorage.getItem('session');
-                if (!session) {
-                    localStorage.clear();
-                    window.location.href = 'login.html';
-                    return;
-                }
-
-                const response = await fetch('http://localhost:3002/api/logout', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({ cookie: session })
-                });
-
-                const data = await response.json();
-                console.log('退出登录响应:', data);
-
-                // 无论服务器响应如何，都清除本地存储并返回登录页
-                localStorage.clear();
-                window.location.href = 'login.html';
-            } catch (error) {
-                console.error('退出登录失败:', error);
-                // 发生错误时也清除本地存储并返回登录页
-                localStorage.clear();
-                window.location.href = 'login.html';
-            }
-        }
-
         // 页面加载完成后执行
         window.onload = async function () {
             await loadUserInfo();
             await loadPapers();
+            // 初始化富文本编辑器
+            const editorConfig = {
+                placeholder: '请输入内容...',
+                onChange(editor) {
+                    const html = editor.getHtml();
+                    console.log('editor content', html);
+                }
+            };
+
+            const editor = createEditor({
+                selector: '#editor-container',
+                html: '<p><br></p>',
+                config: editorConfig,
+                mode: 'default',
+            });
+
+            const toolbar = createToolbar({
+                editor,
+                selector: '#toolbar-container',
+                mode: 'default',
+            });
+
         };
 
         // 点击模态框外部时关闭
