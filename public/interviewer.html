@@ -32,18 +32,6 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        .paper-item {
-            padding: 1rem;
-            border-bottom: 1px solid #eee;
-            margin-bottom: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .paper-item:last-child {
-            border-bottom: none;
-        }
 
         .btn {
             padding: 0.5rem 1rem;
@@ -84,12 +72,25 @@
 
         .modal-content {
             background-color: white;
-            margin: 10% auto;
-            padding: 2rem;
+            margin: 5vh auto;             /* 顶部留白适配屏幕高度 */
+            padding: 1.5rem;
             border-radius: 8px;
-            width: 80%;
-            max-width: 600px;
+            width: 90%;                   /* 移动端宽度适配 */
+            max-width: 600px;             /* PC端最大宽度 */
+            max-height: 80vh;             /* 限制最大高度为 80% 视口高度 */
+            overflow-y: auto;             /* 内容溢出时滚动 */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
         }
+
+        /* 小屏幕优化（可选） */
+        @media (max-width: 480px) {
+            .modal-content {
+                padding: 1rem;
+                width: 95%;
+                max-height: 85vh;
+            }
+        }
+
 
         .form-group {
             margin-bottom: 1rem;
@@ -282,7 +283,7 @@
                 setTimeout(() => {
                     const { createEditor, createToolbar } = window.wangEditor;
                     editorInstance = createEditor({
-                        selector: '#editor',
+                        selector: '#editor-container',
                         html: '',
                         config: {
                             placeholder: '请输入试卷描述...',
@@ -292,15 +293,20 @@
 
                     createToolbar({
                         editor: editorInstance,
-                        selector: '#editor-toolbar',
+                        selector: '#toolbar-container',
                         mode: 'default'
                     });
+
 
                     editorCreated = true;
                 }, 0); // 延迟一点点，确保 DOM 可见
             }
         }
-
+        // 页面加载完成后执行
+        window.onload = async function () {
+            await loadUserInfo();
+            await loadPapers();
+        };
 
         // 隐藏添加试卷的模态框
         function hideAddPaperModal() {
@@ -310,6 +316,10 @@
         // 添加试卷
         document.getElementById('addPaperForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (!editorInstance) {
+                alert("编辑器尚未初始化，请稍后再试");
+                return;  // 防止继续执行
+            }
             const formData = {
                 values: {
                     paper: document.getElementById('paperName').value,
@@ -389,33 +399,6 @@
         function viewResults(paperName) {
             window.location.href = `paper-results.html?paper=${encodeURIComponent(paperName)}`;
         }
-        // 页面加载完成后执行
-        window.onload = async function () {
-            await loadUserInfo();
-            await loadPapers();
-            // 初始化富文本编辑器
-            const editorConfig = {
-                placeholder: '请输入内容...',
-                onChange(editor) {
-                    const html = editor.getHtml();
-                    console.log('editor content', html);
-                }
-            };
-
-            const editor = createEditor({
-                selector: '#editor-container',
-                html: '<p><br></p>',
-                config: editorConfig,
-                mode: 'default',
-            });
-
-            const toolbar = createToolbar({
-                editor,
-                selector: '#toolbar-container',
-                mode: 'default',
-            });
-
-        };
 
         // 点击模态框外部时关闭
         window.onclick = function (event) {
